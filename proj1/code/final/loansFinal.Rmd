@@ -64,7 +64,7 @@ the loan itself (e.g., amount, purpose, and duration).
 
 The FICO score is a popular measure of creditworthiness which incorporates data 
 such as payment history, ratio of current revolving debt, and recent searches 
-of credit history [1]. As such, we anticipate a significant negative 
+of credit history [^1](#f1). As such, we anticipate a significant negative 
 correlation between the interest rate and an applicant's FICO score (i.e., we
 would expect the interest rate to be lower for an applicant with a higher FICO
 score). Here I performed an analysis to determine if there are additional 
@@ -84,7 +84,7 @@ For our analysis, I used a sample of `r nrow(loansData)` peer-to-peer loans
 issued at Lending Club which included non-personally identifying information on
 the person asking for the loan and information on the loan itself (e.g., 
 amount, interest rate, length, and purpose). The data was downloaded from a
-link on Coursera Data Analysis Project 1 web page [2] on November 14, 2013 
+link on Coursera Data Analysis Project 1 web page [^2](#f2) on November 14, 2013 
 using the R programming language. 
 
 _Exploratory Analysis_
@@ -116,14 +116,14 @@ Results:
 The loans data used in this analysis contains the following fields for each 
 loan: its Interest Rate (IR), FICO score of the loan applicant (FICO), the 
 length of the loan (Len), and the amount requested in the application (Req) 
-[3]. We identified no missing values in this dataset.
+[^3](#f3). We identified no missing values in this dataset.
 
 Over 50% of loans had an interest rate between 
 `r paste0(collapse='-', round(quantile(intRate, c(.25,.75))))`% with just
 over `r floor(100*sum(intRate > 20)/nrow(loansData))`% of loans having an 
 interest rate greater than 20%.
 
-Given that the range of FICO scores is between 300 and 850[4], through 
+Given that the range of FICO scores is between 300 and 850[^4](#f4), through 
 exploratory analysis, I determined the best fit to interest rate to be the
 inverse cube of the scaled FICO score:
 
@@ -198,11 +198,11 @@ balance) are already factored into the FICO score.
 References
 ----------
 
-[1]: http://en.wikipedia.org/wiki/Credit_score_in_the_United_States
+<a name="f1">[1]</a>: http://en.wikipedia.org/wiki/Credit_score_in_the_United_States
 
-[2]: `r dataRdaUrl`
+<a name="f2">[2]</a>: `r dataRdaUrl`
 
-[3]: `r codebookUrl`
+<a name="f3">[3]</a>: `r codebookUrl`
 
-[4]: http://en.wikipedia.org/wiki/Credit_score_in_the_United_States#FICO_score_ranges
+<a name="f4">[4]</a>: http://en.wikipedia.org/wiki/Credit_score_in_the_United_States#FICO_score_ranges
 
