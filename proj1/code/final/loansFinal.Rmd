@@ -56,10 +56,24 @@ intRate = loansData$Interest.Rate
 Introduction:
 ------------
 
-Lending Club (https://www.lendingclub.com/) is an online site facilitating loans from peers to peers. When someone requests a loan, Lenging Club determines the interest rate of the loan based on the characteristics of the person asking (e.g., employment history, credit history, and creditworthiness score) and of the loan itself (e.g., amount, purpose, and duration).
+Lending Club (https://www.lendingclub.com/) is an online site facilitating loans
+from peers to peers. When someone requests a loan, Lenging Club determines the 
+interest rate of the loan based on the characteristics of the person asking 
+(e.g., employment history, credit history, and creditworthiness score) and of 
+the loan itself (e.g., amount, purpose, and duration).
 
-The FICO score is a popular measure of creditworthiness which incorporates data such as payment history, ratio of current revolving debt, and recent searches of credit history [1]. As such, we anticipate a significant negative correlation between the interest rate and an applicant's FICO score (i.e., we would expect the interest rate to be lower for an applicant with a higher FICO score). Here I performed an analysis to determine if there are additional variables that have an important association with interest rate after taking into account an applicant's FICO score.
-Using exploratory analysis and standard multiple regression techinques, I show that both loan length and loan amount are associated with the interest rate of a loan after adjusting for the applicant's FICO score.
+The FICO score is a popular measure of creditworthiness which incorporates data 
+such as payment history, ratio of current revolving debt, and recent searches 
+of credit history [1]. As such, we anticipate a significant negative 
+correlation between the interest rate and an applicant's FICO score (i.e., we
+would expect the interest rate to be lower for an applicant with a higher FICO
+score). Here I performed an analysis to determine if there are additional 
+variables that have an important association with interest rate after taking 
+into account an applicant's FICO score.
+
+Using exploratory analysis and standard multiple regression techinques, I show
+that both loan length and loan amount are associated with the interest rate of 
+a loan after adjusting for the applicant's FICO score.
 
 Methods:
 -------
@@ -111,16 +125,17 @@ $$
 \begin{aligned}
 IR &= b_0 + \frac{b_1}{FICO.Scaled^3} + f(Len) + {b_2}\frac{Req}{1000} + e_2
 \end{aligned}
+
 $$
 ```{r model2, dependson='transform', include=FALSE, echo=FALSE, eval=TRUE}
 areq = loansData$Amount.Requested/1000
 model2 = lm(intRate ~ fInv + loansData$Loan.Length + areq)
 s2 = summary(model2)
 ```
-where $b_0$ is an intercept term and $b_1$ are interpreted as before; $f(Len)$ represent a factor model with a different level for 60 month loans than 36 month loans;  and $b_2$ represents the change in interest rate given a change of $1000 dollar in the loan amount requested.  The error term $e_2$ represents the variation in interest rate unaccounted for by these 3 terms.
+where $b_0$ is an intercept term and $b_1$ are interpreted as before; $f(Len)$ represent a factor model with a different level for 60 month loans than 36 month loans;  and $b_2$ represents the change in interest rate given a change of \$1000 dollar in the loan amount requested.  The error term $e_2$ represents the variation in interest rate unaccounted for by these 3 terms.
 
-We observed a highly statistically significant (_P &le; `r max(s2$coefficients[,4])`_) association between loan interest rate and each of these 3 terms.  A change of 1 unit in the inverse cube of FICO.Scaled corresponded to a change of $b_1=`r model2$coefficients[2]`$ in the loan percentage (95% Confidence Interval: `r confint(model2, level=.95)[2,]`); A 60 month loan instead of a 36 month loan corresponded to a change of $f(Len)=`r model2$coefficients[3]`$ inthe loan percentage (95% Confidence Interval: `r confint(model2, level=.95)[3,]`); and a change of $1000 in the 
-requested loan amount corresponded to a change of ($b_2=`r model2$coefficients[4]`$) in the loan percentage (95% Confidence Interval: `r confint(model2, level=0.95)[4,]`). So, for example, if we had two applicants with the same FICO score, and the first requested a 36 month loan, and the second a 60 month, we would expect the second to have an interest rate `r model2$coefficients[3]`% higher.  If the second applicant requested $1000 more, we would expect the interest rate to increase an additional `r model2$coefficients[4]`%
+We observed a highly statistically significant ($P \le$ `r max(s2$coefficients[,4])`) association between loan interest rate and each of these 3 terms.  A change of 1 unit in the inverse cube of FICO.Scaled corresponded to a change of $b_1=`r model2$coefficients[2]`$ in the loan percentage (95% Confidence Interval: `r confint(model2, level=.95)[2,]`); A 60 month loan instead of a 36 month loan corresponded to a change of $f(Len)=`r model2$coefficients[3]`$ inthe loan percentage (95% Confidence Interval: `r confint(model2, level=.95)[3,]`); and a change of \$1000 in the 
+requested loan amount corresponded to a change of ($b_2=`r model2$coefficients[4]`$) in the loan percentage (95% Confidence Interval: `r confint(model2, level=0.95)[4,]`). So, for example, if we had two applicants with the same FICO score, and the first requested a 36 month loan, and the second a 60 month, we would expect the second to have an interest rate `r model2$coefficients[3]`% higher.  If the second applicant requested \$1000 more, we would expect the interest rate to increase an additional `r model2$coefficients[4]`%
 
 Conclusions
 -----------
