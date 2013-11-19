@@ -153,7 +153,6 @@ $$
 \begin{aligned}
 IR &= b_0 + \frac{b_1}{FICO.Scaled^3} + f(Len) + {b_2}\frac{Req}{1000} + e_2
 \end{aligned}
-
 $$
 ```{r model2, dependson='transform', include=FALSE, echo=FALSE, eval=TRUE}
 areq = loansData$Amount.Requested/1000
@@ -163,7 +162,7 @@ s2 = summary(model2)
 where $b_0$ is an intercept term and $b_1$ are interpreted as before; 
 $f(Len)$ represent a factor model with a different level for 60 month loans
 than 36 month loans;  and $b_2$ represents the change in interest rate given 
-a change of \$1000 dollar in the loan amount requested.  The error term $e_2$ 
+a change of \$1000 dollar in the loan amount requested. The error term $e_2$ 
 represents the variation in interest rate unaccounted for by these 3 terms.
 
 We observed a highly statistically significant 
