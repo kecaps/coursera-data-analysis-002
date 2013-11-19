@@ -83,7 +83,7 @@ mtext(text='(a)', side=3, line=1)
 plot(areq, model1$residuals, col=llen, pch=19, 
      cex=0.6, cex.lab=1.3, cex.axis=1.3,
      xlab='Amount Requested ($)', ylab='Residual Interest Rate (%)')
-legend('top', legend=c('Length of loan:',levels(llen)[-1]), 
+legend('topleft', legend=c('Length of loan:',levels(llen)[-1]), 
        col=c(0, 2:nlevels(llen)), pch=19)
 mtext(text='(b)', side=3, line=1)
 
@@ -96,4 +96,4 @@ legend('topleft', legend=c('Length of loan:',levels(llen)[-1]),
 mtext(text='(c)', side=3, line=1)
 
 ```
-`r caption`
+<!-- `r caption` -->
