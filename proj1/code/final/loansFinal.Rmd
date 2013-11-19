@@ -1,6 +1,58 @@
 Title: In addition to FICO Score, increased loan length and loan amount are associated with increased loan rates
 ========================================================
 
+```{r loadData, cache=TRUE, eval=TRUE, echo=FALSE, include=FALSE}
+setwd("~/classes/dataAnalysis002/proj1")
+
+# remote data
+dataCsvUrl <- "https://spark-public.s3.amazonaws.com/dataanalysis/loansData.csv"
+dataRdaUrl <- "https://spark-public.s3.amazonaws.com/dataanalysis/loansData.rda"
+codebookUrl <- "https://spark-public.s3.amazonaws.com/dataanalysis/loansCodebook.pdf"
+dataDir <- 'data'
+if (!file.exists(dataDir)) {
+  dir.create(dataDir)
+}
+
+getDownloadedFile <- function(url, dir=dataDir) {
+  file <- paste(dir, basename(url), sep='/')
+  if (!file.exists(file)) {
+    download.file(url, file, method='curl')
+  }
+  invisible(file)
+}
+
+getDownloadedFile(dataCsvUrl)
+getDownloadedFile(codebookUrl)
+
+dataRdaFile <- getDownloadedFile(dataRdaUrl)
+load(dataRdaFile, verbose=TRUE)
+# loads loansData
+
+##########
+# munge data
+##########
+# store off unmunged data
+rawData = loansData
+
+loansData$Interest.Rate = as.numeric(sub('%$','', as.character(loansData$Interest.Rate)))
+loansData$Debt.To.Income.Ratio = as.numeric(sub('%$','', as.character(loansData$Debt.To.Income.Ratio)))
+
+ficoRangeMeans <- sapply(lapply(strsplit(levels(loansData$FICO.Range), '-'), as.numeric), mean)
+loansData$FICO <- ficoRangeMeans[unclass(loansData$FICO.Range)]
+# loansData$Loan.Length <- as.integer(sub(" months$", "", unclass(loansData$Loan.Length)))
+
+empLengthLevels = levels(loansData$Employment.Length)
+empLengthNumeric = as.numeric(gsub('n/a', '0',
+                                   gsub('^< 1$','0.1', 
+                                   gsub('\\+? years?$', '', 
+                                        empLengthLevels))))
+loansData$Employment.Length.Ordered = ordered(loansData$Employment.Length, 
+                                              levels(reorder(empLengthLevels, empLengthNumeric)))
+loansData$Employment.Length = empLengthNumeric[loansData$Employment.Length]
+
+
+intRate = loansData$Interest.Rate
+```
 Introduction:
 ------------
 
@@ -14,7 +66,7 @@ Methods:
 
 _Data Collection_
 
-For our analysis, I used a sample of 2,500 peer-to-peer loans issued at Lending Club which included non-personally identifying information on the person asking for the loan and information on the loan itself (e.g., amount, interest rate, length, and purpose). The data was downloaded from a link on Coursera Data Analysis Project 1 web page [2] on November 14, 2013 using the R programming language. 
+For our analysis, I used a sample of `r nrow(loansData)` peer-to-peer loans issued at Lending Club which included non-personally identifying information on the person asking for the loan and information on the loan itself (e.g., amount, interest rate, length, and purpose). The data was downloaded from a link on Coursera Data Analysis Project 1 web page [2] on November 14, 2013 using the R programming language. 
 
 _Exploratory Analysis_
 
@@ -33,7 +85,7 @@ Results:
 
 The loans data used in this analysis contains the following fields for each loan: its Interest Rate (IR), FICO score of the loan applicant (FICO), the length of the loan (Len), and the amount requested in the application (Req) [3]. We identified no missing values in this dataset.
 
-Most loans had an interest rate between 10-15% with just over 5% of loans having an interest rate greater than 20%.
+Over 50% of loans had an interest rate between `r paste0(collapse='-', round(quantile(intRate, c(.25,.75))))`% with just over `r floor(100*sum(intRate > 20)/nrow(loansData))`% of loans having an interest rate greater than 20%.
 
 Given that the range of FICO scores is between 300 and 850[4], through exploratory analysis, I determined the best fit to interest rate to be the inverse cube of the scaled FICO score:
 
@@ -43,6 +95,13 @@ $$
  IR &= b_0 + \frac{b_1}{FICO.Scaled^3} + e_1
 \end{aligned}
 $$
+```{r transform, dependson='loadData', include=FALSE, echo=FALSE, eval=TRUE}
+ficoScaled = (loansData$FICO - 300)/(850-300)
+fInv = 1/(ficoScaled^3)
+```
+```{r model1, dependson='transform', include=FALSE, echo=FALSE, eval=TRUE}
+model1 = lm(intRate ~ fInv)
+```
 
 where $b_0$ is an intercept term and $b_1$ represents the change in interest rate given a change of 1 in the inverse cube of FICO.Scaled. The error term $e_1$ represents the variation in interest rate unaccounted for by this transformation of the FICO score. 
 
@@ -53,11 +112,15 @@ $$
 IR &= b_0 + \frac{b_1}{FICO.Scaled^3} + f(Len) + {b_2}\frac{Req}{1000} + e_2
 \end{aligned}
 $$
-
+```{r model2, dependson='transform', include=FALSE, echo=FALSE, eval=TRUE}
+areq = loansData$Amount.Requested/1000
+model2 = lm(intRate ~ fInv + loansData$Loan.Length + areq)
+s2 = summary(model2)
+```
 where $b_0$ is an intercept term and $b_1$ are interpreted as before; $f(Len)$ represent a factor model with a different level for 60 month loans than 36 month loans;  and $b_2$ represents the change in interest rate given a change of $1000 dollar in the loan amount requested.  The error term $e_2$ represents the variation in interest rate unaccounted for by these 3 terms.
 
-We observed a highly statistically significant ($P<2e-16$) association between loan interest rate and each of these 3 terms.  A change of 1 unit in the inverse cube of FICO.Scaled corresponded to a change of $b_1=5.325$ in the loan percentage (95% Confidence Interval: 5.194, 5.456); A 60 month loan instead of a 36 month loan corresponded to a change of $f(Len)=3.294$ int he loan percentage (95% Confidence Interval: 3.088, 3.500); and a change of $1000 in the 
-requested loan amount corresponded to a change of ($b_2=0.144$ in the loan percentage (95% Confidence Interval: 0.133, 0.155). So, for example, if we had two applicants with the same FICO score, and the first requested a 36 month loan, and the second a 60 month, we would expect the second to have an interest rate 3.294% higher.  If the second applicant requested $1000 more, we would expect the interest rate to increase an additional 0.144%
+We observed a highly statistically significant (_P &le; `r max(s2$coefficients[,4])`_) association between loan interest rate and each of these 3 terms.  A change of 1 unit in the inverse cube of FICO.Scaled corresponded to a change of $b_1=`r model2$coefficients[2]`$ in the loan percentage (95% Confidence Interval: `r confint(model2, level=.95)[2,]`); A 60 month loan instead of a 36 month loan corresponded to a change of $f(Len)=`r model2$coefficients[3]`$ inthe loan percentage (95% Confidence Interval: `r confint(model2, level=.95)[3,]`); and a change of $1000 in the 
+requested loan amount corresponded to a change of ($b_2=`r model2$coefficients[4]`$) in the loan percentage (95% Confidence Interval: `r confint(model2, level=0.95)[4,]`). So, for example, if we had two applicants with the same FICO score, and the first requested a 36 month loan, and the second a 60 month, we would expect the second to have an interest rate `r model2$coefficients[3]`% higher.  If the second applicant requested $1000 more, we would expect the interest rate to increase an additional `r model2$coefficients[4]`%
 
 Conclusions
 -----------
@@ -69,9 +132,9 @@ My analysis suggests that there are significant positive correlations between th
 
 [1]: http://en.wikipedia.org/wiki/Credit_score_in_the_United_States
 
-[2]: https://spark-public.s3.amazonaws.com/dataanalysis/loansData.rda
+[2]: `r dataRdaUrl`
 
-[3]: https://spark-public.s3.amazonaws.com/dataanalysis/loansCodebook.pdf
+[3]: `r codebookUrl`
 
 [4]: http://en.wikipedia.org/wiki/Credit_score_in_the_United_States#FICO_score_ranges
 
