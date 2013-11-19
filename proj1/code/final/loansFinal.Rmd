@@ -133,11 +133,11 @@ $$
  IR &= b_0 + \frac{b_1}{FICO.Scaled^3} + e_1
 \end{aligned}
 $$
-```{r transform, dependson='loadData', include=FALSE, echo=FALSE, eval=TRUE}
+```{r transform, include=FALSE, echo=FALSE, eval=TRUE}
 ficoScaled = (loansData$FICO - 300)/(850-300)
 fInv = 1/(ficoScaled^3)
 ```
-```{r model1, dependson='transform', include=FALSE, echo=FALSE, eval=TRUE}
+```{r model1, include=FALSE, echo=FALSE, eval=TRUE}
 model1 = lm(intRate ~ fInv)
 ```
 
@@ -154,7 +154,7 @@ $$
 IR &= b_0 + \frac{b_1}{FICO.Scaled^3} + f(Len) + {b_2}\frac{Req}{1000} + e_2
 \end{aligned}
 $$
-```{r model2, dependson='transform', include=FALSE, echo=FALSE, eval=TRUE}
+```{r model2, include=FALSE, echo=FALSE, eval=TRUE}
 areq = loansData$Amount.Requested/1000
 model2 = lm(intRate ~ fInv + loansData$Loan.Length + areq)
 s2 = summary(model2)
@@ -202,4 +202,3 @@ balance) are already factored into the FICO score.
 [^3]: `r codebookUrl`
 
 [^4]: http://en.wikipedia.org/wiki/Credit_score_in_the_United_States#FICO_score_ranges
-
