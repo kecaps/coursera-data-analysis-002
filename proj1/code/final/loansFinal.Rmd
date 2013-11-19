@@ -1,0 +1,77 @@
+Title: In addition to FICO Score, increased loan length and loan amount are associated with increased loan rates
+========================================================
+
+Introduction:
+------------
+
+Lending Club (https://www.lendingclub.com/) is an online site facilitating loans from peers to peers. When someone requests a loan, Lenging Club determines the interest rate of the loan based on the characteristics of the person asking (e.g., employment history, credit history, and creditworthiness score) and of the loan itself (e.g., amount, purpose, and duration).
+
+The FICO score is a popular measure of creditworthiness which incorporates data such as payment history, ratio of current revolving debt, and recent searches of credit history [1]. As such, we anticipate a significant negative correlation between the interest rate and an applicant's FICO score (i.e., we would expect the interest rate to be lower for an applicant with a higher FICO score). Here I performed an analysis to determine if there are additional variables that have an important association with interest rate after taking into account an applicant's FICO score.
+Using exploratory analysis and standard multiple regression techinques, I show that both loan length and loan amount are associated with the interest rate of a loan after adjusting for the applicant's FICO score.
+
+Methods:
+-------
+
+_Data Collection_
+
+For our analysis, I used a sample of 2,500 peer-to-peer loans issued at Lending Club which included non-personally identifying information on the person asking for the loan and information on the loan itself (e.g., amount, interest rate, length, and purpose). The data was downloaded from a link on Coursera Data Analysis Project 1 web page [2] on November 14, 2013 using the R programming language. 
+
+_Exploratory Analysis_
+
+After examining the raw data provided, I identified transformation to perform such as converting the factors for FICO ranges and interest rate to numeric values. Exploratory analysis was done by examining tables and plots of the data as well as comparing the effects of different data transformations in regression models.  This analysis was used to determine the transformations and terms used in the regression model relating interest rate to FICO score, loan length, and loan size.
+
+_Statistical Modeling_
+
+To relate interest rate to FICO score we performed a standard multivariate linear regression model. Model selection was performed on the basis of our exploratory analysis and prior knoweldge of the composition and range of FICO scores. Coefficients were estimated with ordinary least squares and standard errors were calculated using standard asymptotic approximations.
+
+_Reproducibility_
+
+All Analyses performed in this manuscript are reproduced in the R markdown file loansFinal.Rmd. 
+
+Results:
+-------
+
+The loans data used in this analysis contains the following fields for each loan: its Interest Rate (IR), FICO score of the loan applicant (FICO), the length of the loan (Len), and the amount requested in the application (Req) [3]. We identified no missing values in this dataset.
+
+Most loans had an interest rate between 10-15% with just over 5% of loans having an interest rate greater than 20%.
+
+Given that the range of FICO scores is between 300 and 850[4], through exploratory analysis, I determined the best fit to interest rate to be the inverse cube of the scaled FICO score:
+
+$$
+\begin{aligned}
+ FICO.Scaled &= (FICO - 300)/(850-300) \\
+ IR &= b_0 + \frac{b_1}{FICO.Scaled^3} + e_1
+\end{aligned}
+$$
+
+where $b_0$ is an intercept term and $b_1$ represents the change in interest rate given a change of 1 in the inverse cube of FICO.Scaled. The error term $e_1$ represents the variation in interest rate unaccounted for by this transformation of the FICO score. 
+
+Through additional analysis, I determined that both loan length and amount requested could account for some of this residual variance.  Using
+
+$$
+\begin{aligned}
+IR &= b_0 + \frac{b_1}{FICO.Scaled^3} + f(Len) + {b_2}\frac{Req}{1000} + e_2
+\end{aligned}
+$$
+
+where $b_0$ is an intercept term and $b_1$ are interpreted as before; $f(Len)$ represent a factor model with a different level for 60 month loans than 36 month loans;  and $b_2$ represents the change in interest rate given a change of $1000 dollar in the loan amount requested.  The error term $e_2$ represents the variation in interest rate unaccounted for by these 3 terms.
+
+We observed a highly statistically significant ($P<2e-16$) association between loan interest rate and each of these 3 terms.  A change of 1 unit in the inverse cube of FICO.Scaled corresponded to a change of $b_1=5.325$ in the loan percentage (95% Confidence Interval: 5.194, 5.456); A 60 month loan instead of a 36 month loan corresponded to a change of $f(Len)=3.294$ int he loan percentage (95% Confidence Interval: 3.088, 3.500); and a change of $1000 in the 
+requested loan amount corresponded to a change of ($b_2=0.144$ in the loan percentage (95% Confidence Interval: 0.133, 0.155). So, for example, if we had two applicants with the same FICO score, and the first requested a 36 month loan, and the second a 60 month, we would expect the second to have an interest rate 3.294% higher.  If the second applicant requested $1000 more, we would expect the interest rate to increase an additional 0.144%
+
+Conclusions
+-----------
+
+My analysis suggests that there are significant positive correlations between the interest rate and both loan length and loan size even after taking into account FICO score. As expected, FICO score showed the strongest correlation to interest rate, but I was able to improve the fit by using the loan length and loan size.  No other features in the dataset improved the fit as much as these two.  One possible reason for this could be that many of the other features (e.g., monthly income, employment length, and revolving credit balance) are already factored into the FICO score.
+
+
+
+
+[1]: http://en.wikipedia.org/wiki/Credit_score_in_the_United_States
+
+[2]: https://spark-public.s3.amazonaws.com/dataanalysis/loansData.rda
+
+[3]: https://spark-public.s3.amazonaws.com/dataanalysis/loansCodebook.pdf
+
+[4]: http://en.wikipedia.org/wiki/Credit_score_in_the_United_States#FICO_score_ranges
+
