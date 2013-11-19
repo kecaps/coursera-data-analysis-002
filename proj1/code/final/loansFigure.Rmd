@@ -1,0 +1,99 @@
+
+```{r loadData, cache=TRUE, eval=TRUE, echo=FALSE, include=FALSE}
+setwd("~/classes/dataAnalysis002/proj1")
+
+# remote data
+dataCsvUrl <- "https://spark-public.s3.amazonaws.com/dataanalysis/loansData.csv"
+dataRdaUrl <- "https://spark-public.s3.amazonaws.com/dataanalysis/loansData.rda"
+codebookUrl <- "https://spark-public.s3.amazonaws.com/dataanalysis/loansCodebook.pdf"
+dataDir <- 'data'
+if (!file.exists(dataDir)) {
+  dir.create(dataDir)
+}
+
+getDownloadedFile <- function(url, dir=dataDir) {
+  file <- paste(dir, basename(url), sep='/')
+  if (!file.exists(file)) {
+    download.file(url, file, method='curl')
+  }
+  invisible(file)
+}
+
+getDownloadedFile(dataCsvUrl)
+getDownloadedFile(codebookUrl)
+
+dataRdaFile <- getDownloadedFile(dataRdaUrl)
+load(dataRdaFile, verbose=TRUE)
+# loads loansData
+
+##########
+# munge data
+##########
+# store off unmunged data
+rawData = loansData
+
+loansData$Interest.Rate = as.numeric(sub('%$','', as.character(loansData$Interest.Rate)))
+loansData$Debt.To.Income.Ratio = as.numeric(sub('%$','', as.character(loansData$Debt.To.Income.Ratio)))
+
+ficoRangeMeans <- sapply(lapply(strsplit(levels(loansData$FICO.Range), '-'), as.numeric), mean)
+loansData$FICO <- ficoRangeMeans[unclass(loansData$FICO.Range)]
+# loansData$Loan.Length <- as.integer(sub(" months$", "", unclass(loansData$Loan.Length)))
+
+empLengthLevels = levels(loansData$Employment.Length)
+empLengthNumeric = as.numeric(gsub('n/a', '0',
+                                   gsub('^< 1$','0.1', 
+                                   gsub('\\+? years?$', '', 
+                                        empLengthLevels))))
+loansData$Employment.Length.Ordered = ordered(loansData$Employment.Length, 
+                                              levels(reorder(empLengthLevels, empLengthNumeric)))
+loansData$Employment.Length = empLengthNumeric[loansData$Employment.Length]
+intRate = loansData$Interest.Rate
+```
+```{r transform, dependson='loadData', include=FALSE, echo=FALSE, eval=TRUE}
+ficoScaled = (loansData$FICO - 300)/(850-300)
+fInv = 1/(ficoScaled^3)
+```
+```{r model1, include=FALSE, echo=FALSE, eval=TRUE}
+model1 = lm(intRate ~ fInv)
+```
+```{r model2, include=FALSE, echo=FALSE, eval=TRUE}
+areq = loansData$Amount.Requested/1000
+model2 = lm(intRate ~ fInv + loansData$Loan.Length + areq)
+s2 = summary(model2)
+```
+```{r caption, echo=FALSE}
+caption = "**Figure 1** **(a)** A scatterplot of interest rate versus FICO score. The black line shows the fitted values of the initial linear regression relating interest rate to the inverse cube of the scaled FICO score. **(b)** The residual values from the initial linear regression using just FICO score plotted against the amount requested, colored by loan length. There still is present a linear relationship of the residual values to the amount requested and a separation of values based on loan length (the 60 month loans cluster above the 36 month loans) **&#40;c)** The residual values from the final linear regression taking into account the amount requested and the loan length in addition to the inverse cube of the scaled FICO score.  The residuals are more clustered around 0 and the linear pattern is eliminated."
+```
+```{r fig1, echo=FALSE, dev='png', fig.cap=caption, fig.height=6.5, fig.width=6.5*3}
+intRate = loansData$Interest.Rate
+llen = loansData$Loan.Length
+
+# 3 plots horizontally
+par(mfrow=c(1,3))
+
+# plot interest rate vs FICO and show fitted line for univariate model
+plot(jitter(loansData$FICO), intRate, col='blue', pch=19,
+     cex=0.6, cex.lab=1.3, cex.axis=1.3,
+     xlab='FICO score', ylab='Interest Rate (%)')
+lines(sort(loansData$FICO), model1$fitted.values[order(loansData$FICO)])
+mtext(text='(a)', side=3, line=1)
+
+# show residuals of univariate model plotted against amount requested and colored
+# by loan length
+plot(areq, model1$residuals, col=llen, pch=19, 
+     cex=0.6, cex.lab=1.3, cex.axis=1.3,
+     xlab='Amount Requested ($)', ylab='Residual Interest Rate (%)')
+legend('top', legend=c('Length of loan:',levels(llen)[-1]), 
+       col=c(0, 2:nlevels(llen)), pch=19)
+mtext(text='(b)', side=3, line=1)
+
+# show residuals from multivriate model
+plot(areq, model2$residuals, col=llen, pch=19, 
+     cex=0.6, cex.lab=1.3, cex.axis=1.3,
+     xlab='Amount Requested ($)', ylab='Residual Interest Rate (%)')
+legend('topleft', legend=c('Length of loan:',levels(llen)[-1]), 
+           col=c(0, 2:nlevels(llen)), pch=19)
+mtext(text='(c)', side=3, line=1)
+
+```
+`r caption`
