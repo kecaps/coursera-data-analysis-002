@@ -49,7 +49,7 @@ loansData$Employment.Length.Ordered = ordered(loansData$Employment.Length,
 loansData$Employment.Length = empLengthNumeric[loansData$Employment.Length]
 intRate = loansData$Interest.Rate
 ```
-```{r transform, dependson='loadData', include=FALSE, echo=FALSE, eval=TRUE}
+```{r transform, include=FALSE, echo=FALSE, eval=TRUE}
 ficoScaled = (loansData$FICO - 300)/(850-300)
 fInv = 1/(ficoScaled^3)
 ```
