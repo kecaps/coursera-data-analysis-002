@@ -51,7 +51,6 @@ ssData <- data.frame(do.call('rbind',l))
 names(ssData) = paste0("ss.", names(ssData))
 allData = cbind(samsungData, ssData)
 
-
 ```
 
 Introduction:
@@ -105,6 +104,30 @@ original instances, consisting of `r nrow(samsungData)` instances from
 `r paste0(collapse=" and ", range(tbl_act), rep(" (", 2), activities[c(which.min(tbl_act), which.max(tbl_act))], rep(")", 2))`  
 times; and each subject was measured performing each activity between 
 `r paste0(collapse=" and ", range(tbl_subj_act))` times.
+
+```{r eval=TRUE, echo=FALSE, include=FALSE}
+# divide into training and test set
+subjects = levels(allData$subject)
+testSubjects = subjects[(length(subjects)-4):length(subjects)]
+
+dataSplit = split(allData, allData$subject %in% testSubjects)
+trainData = dataSplit[[1]]
+testData = dataSplit[[2]]
+
+```
+For the prediction model, this data dest was divided into 2 parts: a training
+set used for training and tuning the model, and a test set only used at the end
+for testing the accuracy of the model. The data set was divided based on subject
+to eliminate bias of training and testing on the same person''s activities.  
+Approximately, `r round(100*nrow(testData)/nrow(allData))`% of the data 
+was reserved for testing, consisting of the last `r length(testSubjects)` subjects 
+(`r paste(collapse=", ", testSubjects)`); the data from the remaining 
+`r nlevels(allData$subject)-length(testSubjects)` subjects used for training. 
+This provided `r nrow(trainData)` training instances and `r nrow(testData)` testing
+instances.
+
+_Exploratory Analysis_
+
 
 All `r ncol(samsungData)-2` numeric attributes are present for each instance in
 the data set as well as the 2 categorical attributes: subject 
