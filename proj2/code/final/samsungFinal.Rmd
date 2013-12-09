@@ -284,10 +284,11 @@ in the Y plane, and the minimum gravity acceleration in the X plane.  Figures 2 
 show the clustering of activity in scatter plots of these three variables from the training
 set and test set, respectively.
 
-```{r}
+```{r results="asis", echo="FALSE"}
 impOrder = order(rf$importance[,ncol(rf$importance)], decreasing=TRUE)
-df = data.frame(attr=names(trainData[,-factor_ndx],rf$importance))
-kable(df[impOrder,1:100], format='markDown')
+kable(rf$importance[impOrder,][1:100,])
+```
+
 ```
 ```{r echo=FALSE} 
 library(RColorBrewer)
@@ -300,13 +301,13 @@ the activity of laying shows clustering at both extremes of the line."
 ```
 ```{r fig2, echo=FALSE, dev='png', fig.cap=caption2, fig.height=6, fig.width=10}
 par(mfrow=c(1,2))
-plot(trainData[,-factor_ndx][,order(rf$importance,decreasing=TRUE)[1:2]],
+plot(trainData[,-factor_ndx][,impOrder[1:2]],
         col=colors[trainData$activity],pch=19,
      xlab="Subject-Scaled Y Gravity Acceleration Max", ylab="Subject-Scaled Y Gravity Acceleration Mean")
 legend("topleft", legend=activities, pch=19, col=colors[1:length(activities)],
        text.col=colors[1:length(activities)], cex=0.7)
 mtext(text='(a)',side=3,line=1)
-plot(testData[,-factor_ndx][,order(rf$importance,decreasing=TRUE)[1:2]],
+plot(testData[,-factor_ndx][,impOrder[1:2]],
         col=colors[testData$activity],pch=19,
         xlab="Subject-Scaled Y Gravity Acceleration Max", ylab="Subject-Scaled Y Gravity Acceleration Mean")
 legend("topleft", legend=activities, pch=19, col=colors[1:length(activities)],
@@ -325,13 +326,13 @@ back to the ground."
 ```
 ```{r fig3, echo=FALSE, dev='png', fig.cap=caption3, fig.height=6, fig.width=10}
 par(mfrow=c(1,2))
-plot(trainData[,-factor_ndx][,order(rf$importance,decreasing=TRUE)[c(3,1)]],
+plot(trainData[,-factor_ndx][,impOrder[c(3,1)]],
         col=colors[trainData$activity],pch=19,
         ylab="Subject-Scaled Y Gravity Acceleration Max", xlab="Absolute X Gravity Acceleration Min")
 legend("topright", legend=activities, pch=19, col=colors[1:length(activities)],
        text.col=colors[1:length(activities)], cex=0.7)
 mtext(text='(a)',side=3,line=1)
-plot(testData[,-factor_ndx][,order(rf$importance,decreasing=TRUE)[c(3,1)]],
+plot(testData[,-factor_ndx][,impOrder[c(3,1)]],
         col=colors[testData$activity],pch=19,
         ylab="Subject-Scaled Y Gravity Acceleration Max", xlab="Absolute X Gravity Acceleration Min")
 legend("topright", legend=activities, pch=19, col=colors[1:length(activities)],
