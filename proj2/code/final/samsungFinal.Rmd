@@ -43,14 +43,80 @@ samsungData$activity = factor(samsungData$activity)
 subject_ndx <- which(names(samsungData)=='subject')
 activity_ndx <- which(names(samsungData)=='activity')
 factor_ndx <- c(subject_ndx, activity_ndx)
-
+```
+```{r transformData, cache=TRUE, dependson="loadData", eval=TRUE, echo=FALSE, include=FALSE}
 # create user-scaled data
 l <- split(samsungData[,-factor_ndx], samsungData$subject)
 l <- lapply(l, function(df) { scale(df) })
 ssData <- data.frame(do.call('rbind',l))
 names(ssData) = paste0("ss.", names(ssData))
 allData = cbind(samsungData, ssData)
+```
+```{r cvrfFunctions, cache=TRUE, eval=TRUE, echo=FALSE, include=FALSE}
+library(randomForest)
 
+# cut a factor into num_cut cuts of roughly equal size
+cut_factor <- function(f, num_cuts) {
+  f_counts <- table(f)
+  f_order <- order(f_counts, decreasing=TRUE)
+  
+  f_cuts <- vector('numeric', nlevels(f))
+  cut_buckets <- vector('numeric', num_cuts)
+  cut_names <- vector('list', num_cuts)
+  for (f_ndx in f_order) {
+    cnt <- f_counts[f_ndx]
+    if (cnt == 0) { 
+      break
+    }
+    b_ndx = which.min(cut_buckets)
+    f_cuts[f_ndx] <- b_ndx
+    cut_buckets[b_ndx] <- cut_buckets[b_ndx] + cnt
+    cut_names[[b_ndx]] <- c(cut_names[[b_ndx]], names(f_counts)[f_ndx])
+  }
+  cut_names = sapply(cut_names, function(names) { paste(collapse=",", sort(names)) })
+  factor(cut_names)[f_cuts][f]
+}
+
+# using cross validation, generate random forests, holding out
+# a subset for testing in each generated forest
+cvRandomForest = function(x, f, cv.fold=5, keep.forest=TRUE, ...) {
+  n <- length(f)
+  nlvl <- table(f)
+  idx <- numeric(n)
+  if (is.factor(cv.fold)) {
+    idx <- as.numeric(cv.fold)
+    cv.fold <- nlevels(cv.fold)    
+  } else {
+    for (i in 1:length(nlvl)) {
+      idx[which(f == levels(f)[i])] <-  sample(rep(1:cv.fold, length=nlvl[i]))
+    }
+  }
+  rfs = vector("list", cv.fold)
+  for (i in 1:cv.fold) {
+    xtest=x[idx==i, , drop=FALSE]
+    ytest=f[idx==i]
+    rfs[[i]] <- randomForest(x=x[idx!=i, , drop=FALSE], 
+                             y=f[idx!=i], 
+                             xtest=xtest, ytest=ytest,
+                             keep.forest=keep.forest, ...)
+    rfs[[i]]$test$x = xtest
+    rfs[[i]]$test$y = ytest
+  }
+  return(rfs)
+}
+
+# error rate of random forest in a test
+rfTestErrRate = function(rf) { 
+  err.rate = rf$test$err.rate
+  err.rate[nrow(err.rate),1]
+}
+
+# weighted mean error rate of a list of random forests (from cvRandomForest)
+rfsTestErrRate = function(rfs) { 
+  errRates = sapply(rfs, rfTestErrRate)
+  testLens = sapply(rfs, function(rf) { length(rf$test$predicted) })
+  sum(errRates * testLens)/sum(testLens)
+}
 ```
 
 Introduction:
@@ -64,11 +130,7 @@ what a phone user was doing based on these measurements captured passively by th
 Based on an experiment where volunteers performed a variety of daily activities
 with a phone on their waist, I have developed a Random Forest prediction model
 to determine what a user's activity is based on a set of numeric movement 
-measurements captured by a phone. This model trained on the results of 20
-volunteersTesting showed this model to be .
-
-We have developed a Random Forest prediction model  on a data set from a 30
-volunteer study coverin6 daily activities
+measurements captured by a phone.
 
 Methods:
 -------
@@ -105,7 +167,7 @@ original instances, consisting of `r nrow(samsungData)` instances from
 times; and each subject was measured performing each activity between 
 `r paste0(collapse=" and ", range(tbl_subj_act))` times.
 
-```{r eval=TRUE, echo=FALSE, include=FALSE}
+```{r splitData, cache=TRUE, dependson='transformData', eval=TRUE, echo=FALSE, include=FALSE}
 # divide into training and test set
 subjects = levels(allData$subject)
 testSubjects = subjects[(length(subjects)-4):length(subjects)]
@@ -113,8 +175,8 @@ testSubjects = subjects[(length(subjects)-4):length(subjects)]
 dataSplit = split(allData, allData$subject %in% testSubjects)
 trainData = dataSplit[[1]]
 testData = dataSplit[[2]]
-
 ```
+
 For the prediction model, this data dest was divided into 2 parts: a training
 set used for training and tuning the model, and a test set only used at the end
 for testing the accuracy of the model. The data set was divided based on subject
@@ -127,24 +189,164 @@ This provided `r nrow(trainData)` training instances and `r nrow(testData)` test
 instances.
 
 _Exploratory Analysis_
+```{r exploreData, cache=TRUE, dependson=c('splitData','cvrfFunctions'), eval=TRUE, echo=FALSE, include=FALSE}
 
+cvFolds = 5
+initial.rfs = cvRandomForest(trainData[,1:(min(factor_ndx)-1)], trainData$activity, cvFolds)
+ss.rfs = cvRandomForest(trainData[,-factor_ndx], trainData$activity, cvFolds)
 
-All `r ncol(samsungData)-2` numeric attributes are present for each instance in
-the data set as well as the 2 categorical attributes: subject 
-and activity.
+subject_cuts = cut_factor(trainData$subject, cvFolds)
+subj.initial.rfs = cvRandomForest(trainData[,1:(min(factor_ndx)-1)], trainData$activity, subject_cuts)
+subj.ss.rfs = cvRandomForest(trainData[,-factor_ndx], trainData$activity, subject_cuts)
+```
+```{r eval=TRUE, echo=FALSE, include=FALSE}
+initial.err = rfsTestErrRate(initial.rfs)
+subj.initial.err = rfsTestErrRate(subj.initial.rfs)
+subj.ss.err = rfsTestErrRate(subj.ss.rfs)
+```
+Exploratory analysis was performed by examining the numeric data in tables.  No
+missing values were found. 
 
-`r nlevels(samsungData$subject)`
-`r paste(sort(gsub("(up|down)$", " \\1stairs", gsub("^walk", "walking", levels(samsungData$activity)))), collapse=", ")`
+Further analysis was done using cross-validated[^5] Random Forest[^6][^7] models to 
+investigate additional data transformations. The training data was divided
+into `r cvFolds` subsets, and for each subset, a Random Forest model was built
+from the remaining data in the training set and then tested on the subset.
+to test the subset.  The error rates of the tests of these models were then
+averaged to get an expectation of the model's performance. At first, the 
+error rate was an incredible `r initial.err`, but then I realized that 
+I introduced bias by naively dividing the data into roughly equal 
+subsets--some subjects'' data spanned across these subset 
+boundaries, allowing the model to be tested on its prediction
+of the activities of a subject whose other activities it had also trained on.
+After subsetting the data again into `r cvFolds` subsets while keeping
+each subject's data within a single subset, the error rate 
+increased to `r subj.initial.err`.
+This validated the initial design decision that the sets of subjects 
+in the test and training set are disjoint since that will give a less optimistic
+and less biased estimate of performance on new subjects. It also indicated that
+the standard out-of-bag error estimate[^8] reported in the Random Forests 
+model in R is a biased error measurement since it randomly chooses instances 
+irrespective of subject.
 
-This data set consists of `r nrow(samsungData)` events with `r ncol(samsungData)-2` numeric attributes and 2 categorical attributes: subject and activity.
-There are approximately `r round(mean(table(samsungData$subject)))` events per subject and
-`r round(mean(table(samsungData$activity)))` events per activity.
+I then investigated centering and scaling the numeric measurements per subject and
+adding these to the set of attributes under selection by the Random Forest 
+algorithm. The idea is that one subject may generally move faster than another; 
+e.g., a young boy vs an elderly woman. In such a situation, the maximum Y 
+acceleration of the young boy walking with a small bounce could be similar 
+to the elderly woman standing. However, the relative change in Y acceleration 
+between walking and standing per subject may be more predictive. And, indeed, adding these
+scaled attributes decreased the error rate to `r subj.ss.err`, 
+an improvement of `r 100*(subj.initial.err - subj.ss.err)/subj.ss.err`%. Figure 1
+shows the spread in error rates for the 2 cross validation tests.
 
-_Exploratory Analysis_
+```{r echo=FALSE}
+caption = "A boxplot of error rates from cross-validated testing of
+random forest models built with the original attributes and then built with the
+the scaled attributes in addition to the original.  As can be seen, the models 
+built with the additional scaled attributes had significantly lower error rates."
+```
+```{r fig1, echo=FALSE, dev='png', fig.cap=caption, fig.height=4, fig.width=4}
+boxplot(sapply(subj.initial.rfs, rfTestErrRate), sapply(subj.ss.rfs, rfTestErrRate),
+        col='blue',names=c('original\nattributes', 'with added\nscaled attributes'),
+        main="Error Rates of Cross-Validated\nRandom Forest Models", ylab="Error Rate")
+```
 
+_Statistical Modeling_
 
-After examining the data provided with several techniques such as Singular Value Decomposition
+To relate activity to the numeric measurements from the phone, we used a 
+Random Forest model[^6] using the numeric measurements as well as the scaled set of
+measurements. The attributes found to be most important to classification were
+found from the model and examined more closely to see their effect on clustering 
+of data based on activity.
 
+_Reproducibility_
+
+All analyses performed in this manuscript are reproduced in the R markdown file 
+samsungFinal.Rmd.
+
+Results
+--------
+
+```{r rf, dependson='exploreData', cache=TRUE, eval=TRUE, echo=FALSE, include=FALSE}
+
+rf=randomForest(trainData[,-factor_ndx], trainData$activity, importance=TRUE)
+```
+```{r eval=TRUE, echo=FALSE, include=FALSE}
+# don't know why I need this again?
+library(randomForest)
+```
+After training the model on the whole training set, the error rate on the test
+set was `r 1-mean(testData$activity == predict(rf, testData[,-factor_ndx]))` which
+was in line with what was expected from the cross-validation testing. The two
+most important attributes used by the Random Forest were the subject-scaled maximum
+gravity acceleration in the Y plane, the subject-scaled mean gravity acceleration
+in the Y plane, and the minimum gravity acceleration in the X plane.  Figures 2 and 3
+show the clustering of activity in scatter plots of these three variables from the training
+set and test set, respectively.
+
+```{r}
+impOrder = order(rf$importance[,ncol(rf$importance)], decreasing=TRUE)
+df = data.frame(attr=names(trainData[,-factor_ndx],rf$importance))
+kable(df[impOrder,1:100], format='markDown')
+```
+```{r echo=FALSE} 
+library(RColorBrewer)
+colors = brewer.pal(9, 'Set1')
+caption2 = "Scatterplots of training data (a) and test data (b) showing the clustering
+of activities based on the subject-scaled mean and maximum gravity acceleration in the Y plane.
+Note the strong linear relationship between the mean and max acceleration regardless of
+activity.  The activity of walking upstairs is very clustered in the lower left and
+the activity of laying shows clustering at both extremes of the line."
+```
+```{r fig2, echo=FALSE, dev='png', fig.cap=caption2, fig.height=6, fig.width=10}
+par(mfrow=c(1,2))
+plot(trainData[,-factor_ndx][,order(rf$importance,decreasing=TRUE)[1:2]],
+        col=colors[trainData$activity],pch=19,
+     xlab="Subject-Scaled Y Gravity Acceleration Max", ylab="Subject-Scaled Y Gravity Acceleration Mean")
+legend("topleft", legend=activities, pch=19, col=colors[1:length(activities)],
+       text.col=colors[1:length(activities)], cex=0.7)
+mtext(text='(a)',side=3,line=1)
+plot(testData[,-factor_ndx][,order(rf$importance,decreasing=TRUE)[1:2]],
+        col=colors[testData$activity],pch=19,
+        xlab="Subject-Scaled Y Gravity Acceleration Max", ylab="Subject-Scaled Y Gravity Acceleration Mean")
+legend("topleft", legend=activities, pch=19, col=colors[1:length(activities)],
+       text.col=colors[1:length(activities)], cex=0.7)
+mtext(text='(b)',side=3,line=1)
+```
+
+```{r echo=FALSE}
+caption3 = "Scatterplots of training data (a) and test data (b) showing the clustering
+of activities based on the subject-scaled maximum gravity acceleration in the Y plane and
+the absolute minimum gravity acceleration in the X plane. Note the strong clustering of 
+LAYING activities on the left and upper sides. This makes sense since if someone is laying
+there should be as little movement as possible in the X direction.  However, in lowering
+your body to lay down, there can be quite a bit of Y movement as one angles his or her
+back to the ground."
+```
+```{r fig3, echo=FALSE, dev='png', fig.cap=caption3, fig.height=6, fig.width=10}
+par(mfrow=c(1,2))
+plot(trainData[,-factor_ndx][,order(rf$importance,decreasing=TRUE)[c(3,1)]],
+        col=colors[trainData$activity],pch=19,
+        ylab="Subject-Scaled Y Gravity Acceleration Max", xlab="Absolute X Gravity Acceleration Min")
+legend("topright", legend=activities, pch=19, col=colors[1:length(activities)],
+       text.col=colors[1:length(activities)], cex=0.7)
+mtext(text='(a)',side=3,line=1)
+plot(testData[,-factor_ndx][,order(rf$importance,decreasing=TRUE)[c(3,1)]],
+        col=colors[testData$activity],pch=19,
+        ylab="Subject-Scaled Y Gravity Acceleration Max", xlab="Absolute X Gravity Acceleration Min")
+legend("topright", legend=activities, pch=19, col=colors[1:length(activities)],
+       text.col=colors[1:length(activities)], cex=0.7)
+mtext(text='(b)',side=3,line=1)
+```
+
+Conclusions
+-----------
+
+My analysis suggests that a Random Forest model could be used as a good predictor
+of subject activity based on measurements captured by the phone's accelerometer 
+and gyroscope.  It also shows how bias can be easily introduced by training and testing
+on data from the same subject even if training and testing on different
+instances.
 
 
 [^1]: http://www.pewinternet.org/~/media/Files/Reports/2013/PIP_Smartphone_adoption_2013.pdf
@@ -155,3 +357,10 @@ After examining the data provided with several techniques such as Singular Value
 
 [^4]: `r rdaUrl`, downloaded on `r strftime(rdaDownloadTime, '%F %T %Z')`
 
+[^5]: http://en.wikipedia.org/wiki/Cross-validation_(statistics)
+
+[^6]: http://www.stat.berkeley.edu/~breiman/RandomForests/cc_home.htm
+
+[^7]: http://cran.r-project.org/web/packages/randomForest/randomForest.pdf
+
+[^8]: http://www.stat.berkeley.edu/~breiman/RandomForests/cc_home.htm#ooberr
