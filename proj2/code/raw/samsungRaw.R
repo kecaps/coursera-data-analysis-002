@@ -182,3 +182,175 @@ for (s in y) {
   print(length(xs))
 }
 rem <- sapply(y, function(yy) { length(setdiff(x,yy)) })
+
+norm_err = apply(samsungData[-factor_ndx], 2,
+                 function(col) { sum( (qnorm((1:99)/100, mean=mean(col), sd=sd(col)) - quantile(col, (1:99)/100))^2)/var(col) })
+
+pv <- apply(samsungData[,-factor_ndx],2,
+      function(col) { shapiro.test(sample(col, size=5000,replace=TRUE))$p.value })
+
+
+
+cvRandomForest = function(x, f, cv.fold=5, keep.forest=TRUE, ...) {
+  n <- length(f)
+  nlvl <- table(f)
+  idx <- numeric(n)
+  for (i in 1:length(nlvl)) {
+    idx[which(f == levels(f)[i])] <-  sample(rep(1:cv.fold, length=nlvl[i]))
+  }
+  rfs = vector("list", cv.fold)
+  for (i in 1:cv.fold) {
+    xtest=x[idx==i, , drop=FALSE]
+    ytest=f[idx==i]
+    rfs[[i]] <- randomForest(x=x[idx!=i, , drop=FALSE], 
+                             y=f[idx!=i], 
+                             xtest=xtest, ytest=ytest,
+                             keep.forest=keep.forest, ...)
+    rfs[[i]]$test$x = xtest
+    rfs[[i]]$test$y = ytest
+  }
+  return(rfs)
+}
+
+rfs = cvRandomForest(train_data[,1:(min(factor_ndx)-1)], train_data$activity)
+all_rfs = cvRandomForest(train_data[,-factor_ndx], train_data$activity)
+
+mean(sapply(rfs, function(rf) { rf$test$err.rate[500,1]}))
+mean(sapply(all_rfs, function(rf) { rf$test$err.rate[500,1]}))
+rfs[[1]]$test
+
+# cut a factor into parts trying to keep the size of cuts
+# roughly the same
+cut_factor <- function(f, num_cuts) {
+  f_counts <- table(f)
+  f_order <- order(f_counts, decreasing=TRUE)
+  
+  f_cuts <- vector('numeric', nlevels(f))
+  cut_buckets <- vector('numeric', num_cuts)
+  cut_names <- vector('list', num_cuts)
+  for (f_ndx in f_order) {
+    cnt <- f_counts[f_ndx]
+    if (cnt == 0) { 
+      break
+    }
+    b_ndx = which.min(cut_buckets)
+    f_cuts[f_ndx] <- b_ndx
+    cut_buckets[b_ndx] <- cut_buckets[b_ndx] + cnt
+    cut_names[[b_ndx]] <- c(cut_names[[b_ndx]], names(f_counts)[f_ndx])
+  }
+  cut_names = sapply(cut_names, function(names) { paste(collapse=",", sort(names)) })
+  factor(cut_names)[f_cuts][f]
+}
+
+# 
+cvRandomForest = function(x, f, cv.fold=5, keep.forest=TRUE, ...) {
+  idx <- numeric(n)
+  if (is.factor(cv.fold)) {
+    idx <- as.numeric(cv.fold)
+    cv.fold <- nlevels(cv.fold)    
+  } else {
+    n <- length(f)
+    nlvl <- table(f)
+    for (i in 1:length(nlvl)) {
+      idx[which(f == levels(f)[i])] <-  sample(rep(1:cv.fold, length=nlvl[i]))
+    }
+  }
+  rfs = vector("list", cv.fold)
+  for (i in 1:cv.fold) {
+    xtest=x[idx==i, , drop=FALSE]
+    ytest=f[idx==i]
+    rfs[[i]] <- randomForest(x=x[idx!=i, , drop=FALSE], 
+                             y=f[idx!=i], 
+                             xtest=xtest, ytest=ytest,
+                             keep.forest=keep.forest, ...)
+    rfs[[i]]$test$x = xtest
+    rfs[[i]]$test$y = ytest
+  }
+  return(rfs)
+}
+
+subject_cut = cut_factor(train_data$subject, 5)
+rfs = cvRandomForest(train_data[,1:(min(factor_ndx)-1)], train_data$activity, subject_cut)
+all_rfs = cvRandomForest(train_data[,-factor_ndx], train_data$activity, subject_cut)
+
+mean(sapply(rfs, function(rf) { rf$test$err.rate[500,1]}))
+mean(sapply(all_rfs, function(rf) { rf$test$err.rate[500,1]}))
+
+# pull out the final error rate from the test
+rfTestErrRate = function(rf) { 
+  err.rate = rf$test$err.rate
+  err.rate[nrow(err.rate),1]
+}
+
+# return the mean test error rate across all random forests in the list
+rfsTestErrRate = function(rfs) { 
+  errRates = sapply(rfs, rfTestErrRate)
+  testLens = sapply(rfs, function(rf) { length(rf$test$predicted) })
+  sum(errRates * testLens)/sum(testLens)
+}
+
+rfsTestErrRate(rfs)
+rfsTestErrRate(all_rfs)
+
+sapply(rfs, rfTestErrRate)
+sapply(rfs, function(rf) { 1-mean(predict(rf, rf$test$x)==rf$test$y)})
+
+cvNVarRandomForests <- function(x,y, rfs=NULL, cv.fold=NULL, scale="log", step=0.5,
+                                mtry=function(p) max(1, floor(sqrt(p))), recursive=FALSE,
+                                ...) {
+  p = ncol(x)
+  if (scale == "log") {
+    k <- floor(log(p, base=1/step))
+    n.var <- round(p * step^(0:(k-1)))
+    same <- diff(n.var) == 0
+    if (any(same)) n.var <- n.var[-which(same)]
+    if (! 1 %in% n.var) n.var <- c(n.var, 1)
+  } else {
+    n.var <- seq(from=p, to=1, by=step)
+  }
+  k <- length(n.var)
+  rfsSet <- vector(k, mode="list")
+  attrs <- vector(k, mode="list")
+
+  attrs[[1]] = seq(p)
+  if (is.null(rfs)) {
+    rfs = cvRandomForests(x,y,cv.fold, importance=TRUE,mtry=mtry(ncol(x)),...)
+  }
+  if (is.null(cv.fold)) {
+    cv.fold = length(rfs)
+  }
+  rfsSet[[1]] = rfs
+  for (i in 2:k) {
+    attrOrder = bestOrder(lapply(rfsSet[[i-1]], function(rf) { rf$importance[,ncol(rf$importance)] }),
+                          decreasing=TRUE)
+    attrs[[i]] = attrs[[i-1]][attrOrder[1:n.var[i]]]
+    rfsSet[[i]] = cvRandomForest(x[,attrs[[i]], drop=FALSE],y,cv.fold,importance=TRUE,mtry=mtry(n.var[i]),...)
+  }
+  error.cv <- sapply(rfsSet, rfsTestErrRate)
+  names(error.cv) <- names(rfsSet) <- names(attrs) <- n.var
+  list(n.var=n.var, error.cv=error.cv, attrs=attrs, rfsSet=rfs)
+}
+
+bestOrder <- function(sets, ...) {
+  ranks = sapply(sets, rank)
+  order(rowSums(ranks), ...)
+}
+
+bestOrder2 <- function(sets, decreasing=FALSE,...) {
+  ranks = sapply(sets, rank)
+  bo <- rep(0, length=length(ranks))
+  for (ndx in seq_along(bo)) {
+    best <- order(rowSums(ranks), decreasing=decreasing, ...)[1]
+    for (c_ndx in seq(ncol(ranks))) {
+      idx = ranks[,c_ndx] > ranks[best,c_ndx]
+      ranks[idx,c_ndx] = ranks[idx,c_ndx]-1
+    }
+    ranks[best,c_ndx] = ifelse(decreasing,-Inf,Inf)
+    bo[ndx] = best
+  }
+  bo
+}
+
+  pos = matrix(0, nrow=length(sets), ncol=max(sapply(sets, length)))
+  
+}
